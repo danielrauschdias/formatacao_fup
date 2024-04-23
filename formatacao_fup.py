@@ -28,7 +28,7 @@ def formatar():
     listaTopicos = [];
 
     for i in range(1, 3):
-        tabelaTopCaminho = r"\\base-bhz\MAT_PLE\02 Liberações na Bancada e Transferencias\Transferencias Firme" + f"\{dataHoje} T{i}.xlsx";
+        tabelaTopCaminho = r"" + f"\{dataHoje} T{i}.xlsx";
         if os.path.isfile(tabelaTopCaminho):
             listaTopicos.append(pd.read_excel(tabelaTopCaminho));
             listaTopExist.append(True);
@@ -515,7 +515,7 @@ def formatar():
         numLinhasT1, numLinhasT2 = uneTopicos(wbLiberacao, wsTopico1Nome, wsTopico2Nome);
         linFimTop1, linIniTop2, linFimTop2 = insereValidacaoProbRaiz(wbLiberacao, dataHoje, listaTopExist, numLinhasT1, numLinhasT2, listaTopVazios);
         aplicaEstilo(wbLiberacao, dataHoje, linFimTop1, linIniTop2, linFimTop2, listaTopExist);
-        buscarInformacoesAnteriores(wbLiberacao, dataHoje, r"\\base-bhz\MAT_PLE\02 Liberações na Bancada e Transferencias\Base de Dados\Itens com restrições de liberação.xlsx", linFimTop1, linIniTop2, linFimTop2, listaTopVazios);
+        buscarInformacoesAnteriores(wbLiberacao, dataHoje, r"", linFimTop1, linIniTop2, linFimTop2, listaTopVazios);
 
     else:
 
@@ -539,7 +539,7 @@ def formatar():
         wbLiberacao = load_workbook(wbLiberacaoCaminho);
         linFimTop1, linIniTop2, linFimTop2 = insereValidacaoProbRaiz(wbLiberacao, wsTopicoNome, listaTopExist, numLinhasT1, numLinhasT2, listaTopVazios);
         aplicaEstilo(wbLiberacao, wsTopicoNome, linFimTop1, linIniTop2, linFimTop2, listaTopExist);
-        buscarInformacoesAnteriores(wbLiberacao, wsTopicoNome, r"\\base-bhz\MAT_PLE\02 Liberações na Bancada e Transferencias\Base de Dados\Itens com restrições de liberação.xlsx", linFimTop1, linIniTop2, linFimTop2, listaTopVazios);
+        buscarInformacoesAnteriores(wbLiberacao, wsTopicoNome, r"", linFimTop1, linIniTop2, linFimTop2, listaTopVazios);
 
     #wbLiberacao.close();
     messagebox.showinfo("Conclusão", "Formatação concluída com sucesso!");
@@ -556,7 +556,7 @@ janela.minsize(820, 340);
 
 
 def selecionar_pasta():
-    caminho = filedialog.askopenfilename(initialdir="\\base-bhz\MAT_PLE\02 Liberações na Bancada e Transferencias\Liberações na Bancada", title="Selecione um arquivo");
+    caminho = filedialog.askopenfilename(initialdir="", title="Selecione um arquivo");
     ent_caminho.delete(0, tk.END);
     ent_caminho.insert(0, caminho);
 
