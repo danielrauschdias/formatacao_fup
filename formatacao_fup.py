@@ -40,7 +40,7 @@ def formatar():
     
     if not listaTopExist[0] and not listaTopExist[1]:
         messagebox.showerror("Tópicos não encontrados", 
-                             "Não foi encontrada a pasta de trabalho de nenhum dos dois tópicos no caminho " +  r"\\base-bhz\MAT_PLE\02 Liberações na Bancada e Transferencias\Transferencias Firme" +
+                             "Não foi encontrada a pasta de trabalho de nenhum dos dois tópicos no caminho " +  r"" +
                              " favor colocar a de pelo menos um deles na pasta e tentar novamente.")
         return;
 
