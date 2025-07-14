@@ -1,0 +1,1 @@
+pyinstaller formatacao_fup.py --onefile --noconsole --icon flag-icon.ico --version-file versao.py

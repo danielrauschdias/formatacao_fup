@@ -1,8 +1,11 @@
 import pandas as pd;
 import numpy as np;
+from pathlib import Path;
 from datetime import datetime;
 from datetime import date;
+import locale;
 import os;
+import shutil
 from openpyxl import load_workbook;
 from openpyxl.worksheet.datavalidation import DataValidation;
 from openpyxl.worksheet.table import Table, TableStyleInfo;
@@ -20,17 +23,32 @@ from tkinter import messagebox;
 from PIL import ImageTk, Image;
 import warnings;
 
+locale.setlocale(locale.LC_TIME, "pt_BR.UTF-8")
+
+#Cria o backup da pasta de liberação antes de formatar a planilha.
+def criarBackupPastaLiberacao():
+    caminho_Pasta_Liberacao = ent_caminho_pasta_liberacao.get()
+    caminho_Local_Pasta_Liberacao = Path(caminho_Pasta_Liberacao).parent
+    (caminho_Local_Pasta_Liberacao/"Backup").mkdir(parents=True, exist_ok=True)
+    shutil.copy(caminho_Pasta_Liberacao, caminho_Local_Pasta_Liberacao/"Backup"/f"{Path(caminho_Pasta_Liberacao).name}")
+    
+
 def formatar():
     dataHoje = date.today().strftime("%d-%m-%Y");
 
-    listaTopVazios = [];
-    listaTopExist = [];
-    listaTopicos = [];
+    listaTopVazios = []
+    listaTopExist = []
+    listaTopicos = []
 
+    #Verifica quais tópicos existem, se existir, adiciona o DataFrame à lista listaTopicos, o valor "True" à lista listaTopExist e "False" à lista listaTopVazios, caso contrário, adiciona uma string vazia à lista listaTopicos, "False" à lista listaTopExist e "True" à lista listaTopVazios.
+    caminho_topicos = ent_caminho_topicos.get()
+    if caminho_topicos == "":
+        messagebox.showerror("Caminho inválido", "Favor informar o caminho das planilhas dos tópicos.");
+        return
     for i in range(1, 3):
-        tabelaTopCaminho = r"" + f"\{dataHoje} T{i}.xlsx";
+        tabelaTopCaminho = caminho_topicos + f"\{dataHoje} T{i}.xlsx"
         if os.path.isfile(tabelaTopCaminho):
-            listaTopicos.append(pd.read_excel(tabelaTopCaminho));
+            listaTopicos.append(pd.read_excel(tabelaTopCaminho))
             listaTopExist.append(True);
             listaTopVazios.append(False);
         else:
@@ -38,49 +56,70 @@ def formatar():
             listaTopExist.append(False);
             listaTopVazios.append(True);
     
+    #Verifica se pelo menos um dos tópicos existe, se não existir, exibe uma mensagem de erro e retorna para a tela inicial.
     if not listaTopExist[0] and not listaTopExist[1]:
         messagebox.showerror("Tópicos não encontrados", 
-                             "Não foi encontrada a pasta de trabalho de nenhum dos dois tópicos no caminho " +  r"" +
+                             "Não foi encontrada a pasta de trabalho de nenhum dos dois tópicos no caminho " +  caminho_topicos +
                              " favor colocar a de pelo menos um deles na pasta e tentar novamente.")
-        return;
+        return
 
+    #Verifica se foi digitado algum valor incorreto nos campos de dias de análise, se sim, exibe uma mensagem de erro e retorna para a tela inicial.
     try:
         diasTransf = int(ent_entregaInbound.get());
         diasCompra = int(ent_ordemPlanejada.get());
+        diasCompraCDB = int(ent_ordemPlanejadaCDB.get());
     except ValueError:
         messagebox.showerror("Valor inválido", 
                                 "Foi informado um valor inválido para os dias de análise, são permitidos apenas valores numéricos inteiros, favor informar novamente.");
-        return;
+        return
 
+    #Se os valores de dias de análise forem negativos, exibe uma mensagem de erro e retorna para a tela inicial.
     if (diasTransf < 0 or diasCompra < 0):
         messagebox.showerror("Valor negativo", "Foi informado um valor negativo nos dias de análise, favor informar somente valores positivos.");
-        return;
+        return
     
+    #Se foi digitado um número no lugar de texto para a unidade de negócio, exibe uma mensagem de erro e retorna para a tela inicial.
     undNegoc = combo_undNegoc.get();
     if (undNegoc.isdigit()):
         messagebox.showerror("Valor inválido", "Foi informado um dígito para o nome da unidade de négócio, favor informar apenas palavras.");
-        return;
+        return
 
-    wbLiberacaoCaminho = ent_caminho.get();
+    #Se a unidade de negócio for Helicopteros e o valor de dias de análise de compra CDB for negativo, exibe uma mensagem de erro e retorna para a tela inicial.
+    if (undNegoc == "Helicopteros" and diasCompraCDB < 0):
+        messagebox.showerror("Valor inválido", "Foi informado um valor negativo para os dias de análise de compra CDB, favor informar somente valores positivos.");
+        return
 
-    if (not os.path.isfile(r"filtros.txt")):
-        modoAbertura = "a"
-    else:
-        modoAbertura = "w"
-
+    wbLiberacaoCaminho = ent_caminho_pasta_liberacao.get();
+    caminho_Itens_Restricao = ent_caminho_pasta_restricao.get()
+    #Abre o arquivo de filtros, apaga os valores anteriores e insere os valores que foram utilizados na última formatação.
+    modoAbertura = "w"
     espaco = " \n"
-    arqFiltros = open("filtros.txt", modoAbertura);
-    arqFiltros.writelines([wbLiberacaoCaminho + espaco, undNegoc + espaco, str(diasTransf) + espaco, str(diasCompra) + espaco]);
+    arqFiltros = open(caminho_Filtros, modoAbertura)
+    arqFiltros.writelines([caminho_topicos + espaco, wbLiberacaoCaminho + espaco, caminho_Itens_Restricao + espaco, undNegoc + espaco, str(diasTransf) + espaco, str(diasCompra) + espaco, str(diasCompraCDB) + espaco])
     arqFiltros.close();
 
+    #Define as datas de comparação para os dias de análise de transferência, compra e compra CDB.
     dataComparacaoTransf = datetime.now()+pd.Timedelta(days=diasTransf);
-
     dataComparacaoCompra = datetime.now()+pd.Timedelta(days=diasCompra);
+    dataComparacaoCompraCDB = datetime.now()+pd.Timedelta(days=diasCompraCDB);
 
     dataHoje = date.today().strftime("%d-%m");
 
     wsTopico1Nome = dataHoje + " T1"
     wsTopico2Nome = dataHoje + " T2"
+
+    wbLiberacao = load_workbook(wbLiberacaoCaminho);
+
+    #Percorre todas as planilhas da pasta de trabalho da liberação para verificar se existe a planilha de relatório ou se já existe a planilha de liberação do dia, em ambos os casos, exibe uma mensagem de erro e retorna para a tela inicial.
+    for ws_name in wbLiberacao.sheetnames:
+        if ws_name == "Relatório":
+            wbLiberacao.close()
+            messagebox.showerror("Planilha de Relatório", "Favor apagar a planilha de relatório antes de formatar a planilha de liberação.")
+            return
+        elif ws_name == dataHoje[0:4]:
+            wbLiberacao.close()
+            messagebox.showerror("Planilha de liberação do dia já existente", "A planilha de liberação do dia já existe, favor apagar antes de tentar formatar novamente.")
+            return
 
     numLinhasT1 = 0;
     numLinhasT2 = 0;
@@ -165,16 +204,16 @@ def formatar():
 
         colPrefixo = 12;
 
-        tabelaFiltroDataOrdemSugerida = np.array([registro for registro in arrayTop2Extrac if registro[colDtOrdemSug] <= dataComparacaoTransf and registro[colTipoOrdem] == "Entrega inbound planejada" or registro[colDtOrdemSug] <= dataComparacaoCompra and registro[5] == "Ordem planejada"]);
+        tabelaFiltroUndNegoc = np.array([registro for registro in arrayTop2Extrac if registro[colUndNegoc] == undNegoc]);
 
-        tabelaFiltroUndNegoc = np.array([registro for registro in tabelaFiltroDataOrdemSugerida if registro[colUndNegoc] == undNegoc]);
+        if undNegoc == "UOH":
 
-        if (undNegoc == "MANUTENCAO"):
-            tabelaFiltroCD = np.array([registro for registro in tabelaFiltroUndNegoc if (registro[colOrgOrigem] != "CDC" and registro[colOrgOrigem] != "CDE" and registro[colTipoOrdem] == "Entrega inbound planejada") or registro[colTipoOrdem] == "Ordem planejada"]);
-        elif (undNegoc == "HELICOPTEROS"):
-            tabelaFiltroCD = np.array([registro for registro in tabelaFiltroUndNegoc if (registro[colOrgOrigem] != "CDJ" and registro[colOrgOrigem] != "CDA" and registro[colOrgOrigem] != "CDB" and registro[colOrgOrigem] != "CDH" 
-                                                                                         and registro[colTipoOrdem] == "Entrega inbound planejada") or registro[colTipoOrdem] == "Ordem planejada"]);
- 
+            tabelaFiltroDataOrdemSugerida = np.array([registro for registro in tabelaFiltroUndNegoc if registro[colDtOrdemSug] <= dataComparacaoTransf and registro[colTipoOrdem] == "Entrega inbound planejada" or registro[colDtOrdemSug] <= dataComparacaoCompra and registro[colTipoOrdem] == "Ordem planejada" or registro[colOrgOrigem]=="CDB" and registro[colDtOrdemSug] <= dataComparacaoCompraCDB]);
+        else:
+            tabelaFiltroDataOrdemSugerida = np.array([registro for registro in tabelaFiltroUndNegoc if registro[colDtOrdemSug] <= dataComparacaoTransf and registro[colTipoOrdem] == "Entrega inbound planejada" or registro[colDtOrdemSug] <= dataComparacaoCompra and registro[colTipoOrdem] == "Ordem planejada"]);
+
+        tabelaFiltroCD = np.array([registro for registro in tabelaFiltroDataOrdemSugerida if (registro[colOrgOrigem][:-1] != "CD" and registro[colTipoOrdem] == "Entrega inbound planejada") or registro[colTipoOrdem] == "Ordem planejada"]);
+
         tabelaFiltroPrefixo = np.array([registro for registro in tabelaFiltroCD if registro[colPrefixo] != "CONSUMO" and registro[colPrefixo] != "UNIFORME"]);
 
         for registro in tabelaFiltroPrefixo:
@@ -270,6 +309,7 @@ def formatar():
     
         return topVazio;
 
+    #Insere a validação de dados para o problema raiz e cria os títulos dos tópicos, além de definir o número de linhas de cada tópico.
     def insereValidacaoProbRaiz(wbLiberacao, wsTopicoNome, listaTopExist, numLinhasT1, numLinhasT2, listaTopVazios):
         
         wsTopico = wbLiberacao[wsTopicoNome];
@@ -366,10 +406,15 @@ def formatar():
         colDatasT1 = [12, 13];
         colDatasT2 = [9, 16];
         linCabecalhos = [5, linIniTop2];
+        dtHoje = date.today()
+        diaTab = dtHoje.strftime("%d");
+        mesTab = dtHoje.strftime("%b").capitalize();
+        anoTab = dtHoje.strftime("%Y");
 
         for topExist in range(len(listaTopExist)):
             if (listaTopExist[topExist] and topExist == 0):
-                wsTopico.add_table(Table(displayName=f"Tópico1_Planilha{wbLiberacao.worksheets.index(wsTopico)}", ref=f"A5:T{linFimTop1}", tableStyleInfo=estiloTabela));
+                
+                wsTopico.add_table(Table(displayName=f"Tópico1_{diaTab}_{mesTab}_{anoTab}", ref=f"A5:T{linFimTop1}", tableStyleInfo=estiloTabela));
                 for linha in range(6, linFimTop1+1):
                     for coluna in colDatasT1:
                         wsTopico.cell(linha, coluna).number_format = "dd/mmm/yy";
@@ -378,7 +423,7 @@ def formatar():
                         wsTopico.cell(linCabecalhos[0], coluna).font = Font(color=Color(rgb="000000"));
             
             if (listaTopExist[topExist] and topExist == 1):
-                wsTopico.add_table(Table(displayName=f"Tópico2_Planilha{wbLiberacao.worksheets.index(wsTopico)}", ref=f"A{linIniTop2}:W{linFimTop2}", tableStyleInfo=estiloTabela));
+                wsTopico.add_table(Table(displayName=f"Tópico2_{diaTab}_{mesTab}_{anoTab}", ref=f"A{linIniTop2}:W{linFimTop2}", tableStyleInfo=estiloTabela));
                 for linha in range(linIniTop2+1, linFimTop2+1):
                     celula = wsTopico.cell(linha, 6);
                     if celula.value == "Entrega inbound planejada": 
@@ -428,6 +473,8 @@ def formatar():
             return diaOntem.strftime("%d-%m");
         
 
+    #Busca as informações Ação, Problema Raiz, OBS, PN s/C, Condição e Descrição dos tópicos do dia anterior e insere na planilha do dia atual.
+    #Busca também as informações de restrição dos itens que estão na planilha de restrição.
     def buscarInformacoesAnteriores(wbLiberacao, wsTopicoNome, wbItensRestricaoCaminho, linFimTop1, linIniTop2, linFimTop2, listaTopVazios):
         wbItensRestricao = load_workbook(wbItensRestricaoCaminho);
         wsItensRestricao = wbItensRestricao[wbItensRestricao.sheetnames[0]]
@@ -444,35 +491,42 @@ def formatar():
         linFimT2Old = 0;
         fonteRestricao = Font(bold=True, color="3f3f3f");
 
-        for linha in range(5, wsTopicoDiaAnterior.max_row+1):
+        for linha in range(6, wsTopicoDiaAnterior.max_row+1):
             linhaTopOld = wsTopicoDiaAnterior.cell(linha, 1).value;
-            if (listaTopVazios[1]):
-                linFimT1Old = wsTopicoDiaAnterior.max_row+1;
-            elif (linhaTopOld == "" and not listaTopVazios[0] and linFimT1Old == 0):
-                linFimT1Old = linha;
-            elif (linhaTopOld == "PN" and not listaTopVazios[1] and linIniT2Old == 0):
+            if (linhaTopOld == "" and not listaTopVazios[0] and linFimT1Old == 0):
+                linFimT1Old = linha-1;
+            if (linhaTopOld == "PN" and not listaTopVazios[0] and linFimT1Old == 0):
+                linFimT1Old = linha-6;
+            if (linhaTopOld == "PN" and not listaTopVazios[1] and linIniT2Old == 0):
                 linIniT2Old = linha+1;
-            elif (linIniT2Old != 0):
+            if (linIniT2Old != 0):
                 linFimT2Old = wsTopicoDiaAnterior.max_row+1;
                 break;
-
+        
         if (not listaTopVazios[0]):
-            for linhaNew in range(5, linFimTop1):
-                linConcatNew = wsTopico.cell(linhaNew, 17).value;
+            for linhaNew in range(6, linFimTop1):
+                linConcatNew = wsTopico.cell(linhaNew, 14).value;
                 linPnNew = wsTopico.cell(linhaNew, 6).value;
                 for linhaNumRestricao in range(2, wsItensRestricao.max_row):
-                    linPnRestricao = wsItensRestricao.cell(linhaNumRestricao, 1).value
+                    linPnRestricao = wsItensRestricao.cell(linhaNumRestricao, 1).value;
                     if (linPnNew == linPnRestricao):
                         wsTopico.cell(linhaNew, 6).font = fonteRestricao;
                         wsTopico.cell(linhaNew, 17).value = wsItensRestricao.cell(linhaNumRestricao, 2).value;
                         wsTopico.cell(linhaNew, 18).font = fonteRestricao;
                         wsTopico.cell(linhaNew, 19).font = fonteRestricao;
                 
-                for linhaOld in range(5, linFimT1Old):
-                    linConcatOld = wsTopicoDiaAnterior.cell(linhaOld, 17).value;
+                for linhaOld in range(6, linFimT1Old):
+                    linConcatOld = wsTopicoDiaAnterior.cell(linhaOld, 14).value;
                     if (linConcatOld == linConcatNew):
                         for coluna in range(15, 18):
                             wsTopico.cell(linhaNew, coluna).value = wsTopicoDiaAnterior.cell(linhaOld, coluna).value;
+                        if (wsTopicoDiaAnterior.cell(linhaOld, 18).comment is not None):
+                            wsTopico.cell(linhaNew, 18).comment = wsTopicoDiaAnterior.cell(linhaOld, 18).comment;
+                            wsTopico.cell(linhaNew, 18).comment.text = f"Aba {wsTopicoDiaAnteriorNome}: {wsTopicoDiaAnterior.cell(linhaOld, 15).value}\n" + wsTopico.cell(linhaNew, 18).comment.text;
+                        else:
+                            if (wsTopicoDiaAnterior.cell(linhaOld, 15).value != ""):
+                                wsTopico.cell(linhaNew, 18).comment = Comment(f"Aba {wsTopicoDiaAnteriorNome}: {wsTopicoDiaAnterior.cell(linhaOld, 15).value}", "");
+        wbItensRestricao.close();
 
         if (not listaTopVazios[1]):
             contLinhas = 0;
@@ -497,28 +551,33 @@ def formatar():
                             wsTopico.cell(linhaNew, 21).comment = wsTopicoDiaAnterior.cell(linhaOld, 21).comment;
                             wsTopico.cell(linhaNew, 21).comment.text = f"Aba {wsTopicoDiaAnteriorNome}: {wsTopicoDiaAnterior.cell(linhaOld, 18).value}\n" + wsTopico.cell(linhaNew, 21).comment.text;
                         else:
-                            wsTopico.cell(linhaNew, 21).comment = Comment(f"Aba {wsTopicoDiaAnteriorNome}: {wsTopicoDiaAnterior.cell(linhaOld, 18).value}", "");
+                            if (wsTopicoDiaAnterior.cell(linhaOld, 18).value != ""):
+                                wsTopico.cell(linhaNew, 21).comment = Comment(f"Aba {wsTopicoDiaAnteriorNome}: {wsTopicoDiaAnterior.cell(linhaOld, 18).value}", "");
         wbItensRestricao.close();
         wbLiberacao.save(wbLiberacaoCaminho);
-
     
-
+    if ent_caminho_pasta_liberacao.get() == "":
+        messagebox.showerror("Caminho inválido", "Favor informar o caminho da pasta de trabalho da liberação.")
+        return
+    criarBackupPastaLiberacao()
+    #Se os dois tópicos existirem, filtra os dados de cada tópico, insere a validação de dados, aplica o estilo e busca as informações anteriores.
     if (listaTopExist[0] and listaTopExist[1]):
+        #Se a planilha de liberação estiver aberta, exibe uma mensagem de erro e retorna para a tela inicial.
         try:
             listaTopVazios[0] = filtraTopico1(wbLiberacaoCaminho, wsTopico1Nome, listaTopicos);
             listaTopVazios[1] = filtraTopico2(wbLiberacaoCaminho, wsTopico2Nome, listaTopicos);
-
         except PermissionError:
             messagebox.showerror("Planilha de liberação aberta", "A planilha de liberação está aberta pelo usuário, impossibilitando a formatação, favor fechar e tentar novamente.");
             return;
-        wbLiberacao = load_workbook(wbLiberacaoCaminho);
+        wbLiberacao = load_workbook(wbLiberacaoCaminho)
         numLinhasT1, numLinhasT2 = uneTopicos(wbLiberacao, wsTopico1Nome, wsTopico2Nome);
         linFimTop1, linIniTop2, linFimTop2 = insereValidacaoProbRaiz(wbLiberacao, dataHoje, listaTopExist, numLinhasT1, numLinhasT2, listaTopVazios);
         aplicaEstilo(wbLiberacao, dataHoje, linFimTop1, linIniTop2, linFimTop2, listaTopExist);
-        buscarInformacoesAnteriores(wbLiberacao, dataHoje, r"", linFimTop1, linIniTop2, linFimTop2, listaTopVazios);
-
+        #Para fazer alterações na planilha de itens com restrições, seguir o padrão dentro da planilha se não o programa não irá funcionar corretamente.
+        buscarInformacoesAnteriores(wbLiberacao, dataHoje, caminho_Itens_Restricao, linFimTop1, linIniTop2, linFimTop2, listaTopVazios)
+    #Se apenas o tópico 1 existir, filtra os dados do tópico 1, insere a validação de dados, aplica o estilo e busca as informações anteriores.    
     else:
-
+        print("Existe apenas um tópico")
         i = 1;
         while i <= len(listaTopicos):
             topicoIdx = i-1;
@@ -536,12 +595,12 @@ def formatar():
                 messagebox.showerror("Planilha de liberação aberta", "A planilha de liberação está aberta pelo usuário, impossibilitando a formatação, favor fechar e tentar novamente.");
                 return
             i +=1;
-        wbLiberacao = load_workbook(wbLiberacaoCaminho);
+        wbLiberacao = load_workbook(wbLiberacaoCaminho)
         linFimTop1, linIniTop2, linFimTop2 = insereValidacaoProbRaiz(wbLiberacao, wsTopicoNome, listaTopExist, numLinhasT1, numLinhasT2, listaTopVazios);
         aplicaEstilo(wbLiberacao, wsTopicoNome, linFimTop1, linIniTop2, linFimTop2, listaTopExist);
-        buscarInformacoesAnteriores(wbLiberacao, wsTopicoNome, r"", linFimTop1, linIniTop2, linFimTop2, listaTopVazios);
+        buscarInformacoesAnteriores(wbLiberacao, wsTopicoNome, caminho_Itens_Restricao, linFimTop1, linIniTop2, linFimTop2, listaTopVazios);
 
-    #wbLiberacao.close();
+    wbLiberacao.close()
     messagebox.showinfo("Conclusão", "Formatação concluída com sucesso!");
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl");
@@ -550,18 +609,30 @@ bgCor = "#eef1e6";
 
 janela = tk.Tk();
 janela.title("Formatação Follow-Up");
-janela.iconbitmap("flag-icon.ico");
+janela.iconbitmap(Path("flag-icon.ico"));
 janela.config(bg=bgCor);
-janela.minsize(820, 340);
+janela.minsize(940, 540);
 
+#Função para selecionar o caminho dos tópicos.
+def selecionar_caminho_topicos():
+    caminho_topicos = filedialog.askdirectory(title="Selecione um caminho");
+    ent_caminho_topicos.delete(0, tk.END);
+    ent_caminho_topicos.insert(0, caminho_topicos);
 
-def selecionar_pasta():
-    caminho = filedialog.askopenfilename(initialdir="", title="Selecione um arquivo");
-    ent_caminho.delete(0, tk.END);
-    ent_caminho.insert(0, caminho);
+#Função para escolher a pasta de trabalho da liberação.
+def selecionar_pasta_liberacao():
+    caminho_liberacao = filedialog.askopenfilename(title="Selecione um arquivo");
+    ent_caminho_pasta_liberacao.delete(0, tk.END);
+    ent_caminho_pasta_liberacao.insert(0, caminho_liberacao);
+
+#Função para escolher a pasta de trabalho dos itens com restrição de liberação.
+def selecionar_pasta_restricao():
+    caminho_restricao = filedialog.askopenfilename(title="Selecione um arquivo");
+    ent_caminho_pasta_restricao.delete(0, tk.END);
+    ent_caminho_pasta_restricao.insert(0, caminho_restricao);
 
 def centralizar_Janela(janela):
-    altura_janela = 340;
+    altura_janela = 540;
     largura_janela = 940;
 
     largura_tela = janela.winfo_screenwidth();
@@ -572,69 +643,94 @@ def centralizar_Janela(janela):
 
     janela.geometry(f"{largura_janela}x{altura_janela}+{x}+{y}");
 
-
-frames = {"A0":tk.Frame(), "A1":tk.Frame(), "A2":tk.Frame(), "A3":tk.Frame(), "A4":tk.Frame(), "A5":tk.Frame(),
-          "B0":tk.Frame(), "B1":tk.Frame(), "B2":tk.Frame(), "B3":tk.Frame(), "B4":tk.Frame(), "B5":tk.Frame(),
-          "C0":tk.Frame(), "C1":tk.Frame(), "C2":tk.Frame(), "C3":tk.Frame(), "C4":tk.Frame(), "C5":tk.Frame()};
+#Cria as linhas e colunas da janela principal.
+frames = {"A0":tk.Frame(), "A1":tk.Frame(), "A2":tk.Frame(), "A3":tk.Frame(), "A4":tk.Frame(), "A5":tk.Frame(), "A6":tk.Frame(), "A7":tk.Frame(), "A8":tk.Frame(), "A9":tk.Frame(),
+          "B0":tk.Frame(), "B1":tk.Frame(), "B2":tk.Frame(), "B3":tk.Frame(), "B4":tk.Frame(), "B5":tk.Frame(), "B6":tk.Frame(), "B7":tk.Frame(), "B8":tk.Frame(), "B9":tk.Frame(),
+          "C0":tk.Frame(), "C1":tk.Frame(), "C2":tk.Frame(), "C3":tk.Frame(), "C4":tk.Frame(), "C5":tk.Frame(), "C6":tk.Frame(), "C7":tk.Frame(), "C8":tk.Frame(), "C9":tk.Frame()};
 
 listaColunas = ["A", "B", "C"]
 
 for coluna in range(0, 3):
     janela.columnconfigure(coluna, weight=1, minsize=50);
-    for linha in range(0, 6):
+    for linha in range(0, 9):
         frames[listaColunas[coluna] + str(linha)].grid(row=linha, column=coluna, padx=10, pady=10);
         janela.rowconfigure(linha, weight=1, minsize=25);
 
 fontLblEntries = ["Calibri", 12];
 
-logo_lider = ImageTk.PhotoImage(Image.open("logo_lider.png").resize((234, 38)));
+#Cria os textos, botões, entradas e imagens da janela principal.
+
+logo_lider = ImageTk.PhotoImage(Image.open(Path("logo_lider.png")).resize((234, 38)));
 
 lbl_logoLider = tk.Label(master=frames["A0"], image=logo_lider, bg=bgCor);
-lbl_tituloFup = tk.Label(master=frames["B0"], text="Formatação do Follow-Up", font=("Arial", 21, "bold"), fg="#00513a", bg=bgCor);
-
-lbl_caminho = tk.Label(master=frames["A1"], text="Caminho da pasta de trabalho da liberação: ", bg=bgCor, font=fontLblEntries);
-ent_caminho = tk.Entry(master=frames["B1"], width=50, font=fontLblEntries);
-btn_caminho = tk.Button(master=frames["C1"], width=20, text="Selecionar arquivo", command=selecionar_pasta, font=fontLblEntries);
-
-lbl_undNegoc = tk.Label(master=frames["A2"], text="Unidade de Negócio:", width=20, bg=bgCor, font=fontLblEntries);
-listaUndNegoc = ["HELICOPTEROS", "MANUTENCAO"];
-combo_undNegoc = ttk.Combobox(master=frames["B2"], values=listaUndNegoc, font=fontLblEntries, justify="center");
-
-lbl_entregaInbound = tk.Label(master=frames["A3"], text="Dias de análise\n Entrega Inbound Planejada:", width=30, bg=bgCor, font=fontLblEntries);
-ent_entregaInbound = tk.Entry(master=frames["B3"], width=10, justify="center", font=fontLblEntries);
-
-lbl_ordemPlanejada = tk.Label(master=frames["A4"], text="Dias de análise\n Ordem Planejada:", width=30, bg=bgCor, font=fontLblEntries);
-ent_ordemPlanejada = tk.Entry(master=frames["B4"], width=10, justify="center", font=fontLblEntries);
-
-btn_formatar = tk.Button(master=frames["B5"], text="Formatar", command=formatar, width=20, font=fontLblEntries);
-
 lbl_logoLider.pack();
+lbl_tituloFup = tk.Label(master=frames["B0"], text="Formatação do Follow-Up", font=("Arial", 21, "bold"), fg="#00513a", bg=bgCor);
 lbl_tituloFup.pack();
-lbl_caminho.pack(padx=10);
-ent_caminho.pack();
+
+lbl_caminho_topicos = tk.Label(master=frames["A1"], text="Caminho das planilhas dos tópicos: ", bg=bgCor, font=fontLblEntries);
+lbl_caminho_topicos.pack(padx=10);
+ent_caminho_topicos = tk.Entry(master=frames["B1"], width=50, font=fontLblEntries);
+ent_caminho_topicos.pack();
+btn_caminho_topicos = tk.Button(master=frames["C1"], width=20, text="Selecionar caminho", command=selecionar_caminho_topicos, font=fontLblEntries);
+btn_caminho_topicos.pack(padx=10);
+
+lbl_caminho_pasta_liberacao = tk.Label(master=frames["A2"], text="Caminho da pasta de trabalho da liberação: ", bg=bgCor, font=fontLblEntries);
+lbl_caminho_pasta_liberacao.pack(padx=10);
+ent_caminho_pasta_liberacao = tk.Entry(master=frames["B2"], width=50, font=fontLblEntries);
+ent_caminho_pasta_liberacao.pack();
+btn_caminho_pasta_liberacao = tk.Button(master=frames["C2"], width=20, text="Selecionar arquivo", command=selecionar_pasta_liberacao, font=fontLblEntries);
+btn_caminho_pasta_liberacao.pack(padx=10);
+
+lbl_caminho_pasta_restricao = tk.Label(master=frames["A3"], text="Caminho da pasta de trabalho dos itens " + "\n que possuem restrição de liberação: ", bg=bgCor, font=fontLblEntries);
+lbl_caminho_pasta_restricao.pack(padx=10);
+ent_caminho_pasta_restricao = tk.Entry(master=frames["B3"], width=50, font=fontLblEntries);
+ent_caminho_pasta_restricao.pack();
+btn_caminho_pasta_restricao = tk.Button(master=frames["C3"], width=20, text="Selecionar arquivo", command=selecionar_pasta_restricao, font=fontLblEntries);
+btn_caminho_pasta_restricao.pack(padx=10);
+
+lbl_undNegoc = tk.Label(master=frames["A4"], text="Unidade de Negócio:", width=20, bg=bgCor, font=fontLblEntries);
 lbl_undNegoc.pack();
+listaUndNegoc = ["HELICOPTEROS", "MANUTENCAO"];
+combo_undNegoc = ttk.Combobox(master=frames["B4"], values=listaUndNegoc, font=fontLblEntries, justify="center");
 combo_undNegoc.pack();
+
+lbl_entregaInbound = tk.Label(master=frames["A5"], text="Dias de análise\n Entrega Inbound Planejada:", width=30, bg=bgCor, font=fontLblEntries);
 lbl_entregaInbound.pack();
+ent_entregaInbound = tk.Entry(master=frames["B5"], width=10, justify="center", font=fontLblEntries);
 ent_entregaInbound.pack();
+
+lbl_ordemPlanejada = tk.Label(master=frames["A6"], text="Dias de análise\n Ordem Planejada Geral:", width=30, bg=bgCor, font=fontLblEntries);
 lbl_ordemPlanejada.pack();
+ent_ordemPlanejada = tk.Entry(master=frames["B6"], width=10, justify="center", font=fontLblEntries);
 ent_ordemPlanejada.pack();
-btn_caminho.pack(padx=10);
+
+lbl_ordemPlanejadaCDB = tk.Label(master=frames["A7"], text="Dias de análise\n Ordem Planejada CDB-UOH:", width=30, bg=bgCor, font=fontLblEntries);
+lbl_ordemPlanejadaCDB.pack();
+ent_ordemPlanejadaCDB = tk.Entry(master=frames["B7"], width=10, justify="center", font=fontLblEntries);
+ent_ordemPlanejadaCDB.pack();
+
+btn_formatar = tk.Button(master=frames["B8"], width=20, text="Formatar", command=formatar, font=fontLblEntries);
 btn_formatar.pack(pady=10);
 
 centralizar_Janela(janela);
 
-if (os.path.isfile(r"filtros.txt")):
-    arqFiltros = open("filtros.txt", "r");
+#Carrega os filtros salvos, se existirem, e preenche os campos correspondentes.
+caminho_Filtros = Path("filtros.txt");
+if caminho_Filtros.exists():
+    arqFiltros = open(caminho_Filtros, "r");
     listaFiltros = arqFiltros.readlines();
-    
     for filtro in range(len(listaFiltros)):
         listaFiltros[filtro] = listaFiltros[filtro].strip();
-    ent_caminho.insert(0, listaFiltros[0]);
-    combo_undNegoc.insert(0, listaFiltros[1].strip());
-    ent_entregaInbound.insert(0, listaFiltros[2]);
-    ent_ordemPlanejada.insert(0, listaFiltros[3]);
+    ent_caminho_topicos.insert(0, listaFiltros[0]);
+    ent_caminho_pasta_liberacao.insert(0, listaFiltros[1]);
+    ent_caminho_pasta_restricao.insert(0, listaFiltros[2])
+    combo_undNegoc.insert(0, listaFiltros[3].strip());
+    ent_entregaInbound.insert(0, listaFiltros[4]);
+    ent_ordemPlanejada.insert(0, listaFiltros[5]);
+    ent_ordemPlanejadaCDB.insert(0, listaFiltros[6]);
     arqFiltros.close()
 
+#Inicia a execução da janela principal.
 janela.mainloop();
         
 
