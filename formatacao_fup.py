@@ -607,6 +607,13 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl");
 
 bgCor = "#eef1e6";
 
+if Path("flag-icon.ico").exists() == False:
+    messagebox.showerror("Erro", "O arquivo 'flag-icon.ico' não foi encontrado. Favor verificar o diretório do programa.");
+    exit();
+elif Path("logo_lider.png").exists() == False:
+    messagebox.showerror("Erro", "O arquivo 'logo_lider.png' não foi encontrado. Favor verificar o diretório do programa.");
+    exit();
+
 janela = tk.Tk();
 janela.title("Formatação Follow-Up");
 janela.iconbitmap(Path("flag-icon.ico"));
@@ -719,16 +726,20 @@ caminho_Filtros = Path("filtros.txt");
 if caminho_Filtros.exists():
     arqFiltros = open(caminho_Filtros, "r");
     listaFiltros = arqFiltros.readlines();
-    for filtro in range(len(listaFiltros)):
-        listaFiltros[filtro] = listaFiltros[filtro].strip();
-    ent_caminho_topicos.insert(0, listaFiltros[0]);
-    ent_caminho_pasta_liberacao.insert(0, listaFiltros[1]);
-    ent_caminho_pasta_restricao.insert(0, listaFiltros[2])
-    combo_undNegoc.insert(0, listaFiltros[3].strip());
-    ent_entregaInbound.insert(0, listaFiltros[4]);
-    ent_ordemPlanejada.insert(0, listaFiltros[5]);
-    ent_ordemPlanejadaCDB.insert(0, listaFiltros[6]);
-    arqFiltros.close()
+    if len(listaFiltros) < 7:
+        messagebox.showerror("Filtros inválidos", "O arquivo de filtros está incompleto ou corrompido. Favor verificar o arquivo.");
+        arqFiltros.close();
+    else:
+        for filtro in range(len(listaFiltros)):
+            listaFiltros[filtro] = listaFiltros[filtro].strip();
+        ent_caminho_topicos.insert(0, listaFiltros[0]);
+        ent_caminho_pasta_liberacao.insert(0, listaFiltros[1]);
+        ent_caminho_pasta_restricao.insert(0, listaFiltros[2])
+        combo_undNegoc.insert(0, listaFiltros[3].strip());
+        ent_entregaInbound.insert(0, listaFiltros[4]);
+        ent_ordemPlanejada.insert(0, listaFiltros[5]);
+        ent_ordemPlanejadaCDB.insert(0, listaFiltros[6]);
+        arqFiltros.close()
 
 #Inicia a execução da janela principal.
 janela.mainloop();
